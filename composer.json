@@ -1,5 +1,6 @@
 {
     "name": "fxrm/action",
+    "description": "Framework-agnostic form renderer and handler",
     "authors": [
         {
             "name": "Nick Matantsev",
