@@ -1,0 +1,16 @@
+{
+    "name": "fxrm/action",
+    "authors": [
+        {
+            "name": "Nick Matantsev",
+            "email": "unframework@github.com"
+        }
+    ],
+    "autoload": {
+        "psr-0": {
+            "Fxrm": "src/"
+        }
+    },
+    "require": {
+    }
+}
