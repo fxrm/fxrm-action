@@ -1,5 +1,10 @@
 <?php
 
+/**
+ * @author Nick Matantsev <nick.matantsev@gmail.com>
+ * @copyright Copyright (c) 2013, Nick Matantsev
+ */
+
 namespace Fxrm\Action;
 
 /**
@@ -56,13 +61,14 @@ class Handler {
 
             $value = null;
 
+            // @todo IMPORTANT: the "_" in private params is actually supposed to be a dot (Unix-y metaphor) - manually parse query? or use other marker
             if (isset($_REQUEST[$param])) {
                 $value = $_REQUEST[$param];
 
                 // save public values to be sent back as necessary
                 $publicRequestValues->$param = $value;
-            } elseif (isset($_REQUEST[".$param"])) {
-                $value = $_REQUEST[".$param"];
+            } elseif (isset($_REQUEST["_$param"])) {
+                $value = $_REQUEST["_$param"];
 
                 // not sending back private values
                 $publicRequestValues->$param = null;
