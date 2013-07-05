@@ -14,16 +14,17 @@ namespace Fxrm\Action;
 class Form {
     private $stage = 0;
 
-    private $methodName;
+    private $url;
     private $paramTypes;
     private $fieldValues;
     private $returnValue, $fieldError, $actionError, $hasReturnValue;
 
-    function __construct($app, $methodName) {
+    // @todo endpoint URL should be inferred as a *serialization of app instance + method name*
+    function __construct($id, $endpointUrl, $app, $methodName) {
         $classInfo = new \ReflectionClass($app);
         $methodInfo = $classInfo->getMethod($methodName);
 
-        $this->methodName = $methodName;
+        $this->url = $endpointUrl === null ? $endpointUrl : $this->addUrlRedirectHash($endpointUrl, md5($id));
         $this->paramTypes = (object)array();
 
         foreach ($methodInfo->getParameters() as $param) {
@@ -35,10 +36,10 @@ class Form {
 
         // parse errors if given via query-string payload
         // @todo preserve field values across submits! ugh but then URL limits start being hit - cache those temporarily?
-        if (isset($_GET['$_'])) {
+        if (isset($_GET['$_']) && $id !== null) {
             $payload = explode("\x00", base64_decode($_GET['$_']), 4);
 
-            if (count($payload) === 4 && $payload[0] === md5(get_class($app) . "\x00" . $methodName)) {
+            if (count($payload) === 4 && $payload[0] === md5($id)) {
                 $fieldValues = json_decode($payload[1]);
                 $status = $payload[2];
                 $data = json_decode($payload[3]);
@@ -79,19 +80,23 @@ class Form {
         return isset($this->fieldError->$fieldName) ? $this->fieldError->$fieldName : null;
     }
 
-    function start($endpointUrl) {
+    function start() {
         if ($this->stage !== 0) {
             throw new \Exception('form already started');
         }
 
         $this->stage = 1;
 
-        $urlParts = explode('?', $endpointUrl, 2);
+        echo '<form action="' . htmlspecialchars($this->url) . '" method="post">';
+    }
+
+    private function addUrlRedirectHash($url, $hash) {
+        $urlParts = explode('?', $url, 2);
 
         $baseUrl = $urlParts[0];
-        $query = (count($urlParts) === 2 ? $urlParts[1] . '&' : '') . 'redirect';
+        $query = (count($urlParts) === 2 ? $urlParts[1] . '&' : '') . 'redirect=' . rawurlencode($hash);
 
-        echo '<form action="' . htmlspecialchars($baseUrl) . '/' . htmlspecialchars(urlencode($this->methodName)) . '?' . htmlspecialchars($query) . '" method="post">';
+        return $baseUrl . '?' . $query;
     }
 
     function field($fieldName, $type, $initialValue = null, $options = null) {

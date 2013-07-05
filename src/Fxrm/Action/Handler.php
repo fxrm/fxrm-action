@@ -13,7 +13,7 @@ namespace Fxrm\Action;
  * Non-AJAX (redirect) mode is supported for reporting results.
  */
 class Handler {
-    public static function invoke($app, $internFunc, $externFunc) {
+    public static function invoke($app, $methodName, $internFunc, $externFunc) {
         // error -> exception converter
         set_error_handler(function ($errno, $errstr, $errfile, $errline) {
             // ignore errors when @ operator is used
@@ -25,7 +25,7 @@ class Handler {
         });
 
         try {
-            self::invokeSafe($app, $internFunc, $externFunc);
+            self::invokeSafe($app, $methodName, $internFunc, $externFunc);
         } catch(\Exception $e) {
             // always clean up handler
             restore_error_handler();
@@ -36,7 +36,7 @@ class Handler {
         restore_error_handler();
     }
 
-    private static function invokeSafe($app, $internFunc, $externFunc) {
+    private static function invokeSafe($app, $methodName, $internFunc, $externFunc) {
         // check for GPC slashes kid-gloves
         if (get_magic_quotes_gpc()) {
             throw new \Exception('magic_quotes_gpc mode must not be enabled');
@@ -44,14 +44,12 @@ class Handler {
 
         // @todo check for POST method
 
-        // get the method corresponding to current route
-        $methodName = isset($_SERVER['PATH_INFO']) ? substr($_SERVER['PATH_INFO'], 1) : '';
-
         $bodyFunctionInfo = new \ReflectionMethod($app, $methodName);
 
         // collect necessary parameter data
         $apiParameterList = array();
 
+        // public request values are saved raw, before deserialization (the latter may fail)
         $publicRequestValues = (object)array();
         $fieldErrors = (object)array();
 
@@ -119,9 +117,8 @@ class Handler {
     private static function report($app, $methodName, $fieldValues, $httpStatus, $jsonData) {
         // non-AJAX mode
         if (isset($_GET['redirect']) && isset($_SERVER['HTTP_REFERER'])) {
-            // hiding internal implementation names
-            // @todo consider better ways to uniquely identify a form submission
-            $formSignature = md5(get_class($app) . "\x00" . $methodName);
+            // identify which form on the originating page this is intended for
+            $formSignature = $_GET['redirect'];
 
             // work with referer URL query-string
             $urlParts = explode('?', $_SERVER['HTTP_REFERER'], 2);
