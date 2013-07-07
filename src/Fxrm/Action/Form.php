@@ -12,6 +12,8 @@ namespace Fxrm\Action;
  * Non-AJAX (redirect) mode is supported for reporting results.
  */
 class Form {
+    private $serializer;
+
     private $stage = 0;
 
     private $url;
@@ -20,7 +22,9 @@ class Form {
     private $returnValue, $fieldError, $actionError, $hasReturnValue;
 
     // @todo endpoint URL should be inferred as a *serialization of app instance + method name*
-    function __construct($id, $endpointUrl, $app, $methodName) {
+    function __construct(ContextSerializer $serializer, $id, $endpointUrl, $app, $methodName) {
+        $this->serializer = $serializer;
+
         $classInfo = new \ReflectionClass($app);
         $methodInfo = $classInfo->getMethod($methodName);
 

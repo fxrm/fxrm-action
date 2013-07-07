@@ -13,7 +13,13 @@ namespace Fxrm\Action;
  * Non-AJAX (redirect) mode is supported for reporting results.
  */
 class Handler {
-    public static function invoke($app, $methodName, $internFunc, $externFunc) {
+    private $serializer;
+
+    function __construct(ContextSerializer $serializer) {
+        $this->serializer = $serializer;
+    }
+
+    public function invoke($app, $methodName, $internFunc, $externFunc) {
         // error -> exception converter
         set_error_handler(function ($errno, $errstr, $errfile, $errline) {
             // ignore errors when @ operator is used
@@ -25,7 +31,7 @@ class Handler {
         });
 
         try {
-            self::invokeSafe($app, $methodName, $internFunc, $externFunc);
+            $this->invokeSafe($app, $methodName, $internFunc, $externFunc);
         } catch(\Exception $e) {
             // always clean up handler
             restore_error_handler();
@@ -36,7 +42,7 @@ class Handler {
         restore_error_handler();
     }
 
-    private static function invokeSafe($app, $methodName, $internFunc, $externFunc) {
+    private function invokeSafe($app, $methodName, $internFunc, $externFunc) {
         // check for GPC slashes kid-gloves
         if (get_magic_quotes_gpc()) {
             throw new \Exception('magic_quotes_gpc mode must not be enabled');
