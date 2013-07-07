@@ -14,12 +14,21 @@ namespace Fxrm\Action;
  */
 class Handler {
     private $serializer;
+    private $exceptionMap;
 
-    function __construct(ContextSerializer $serializer) {
+    function __construct(ContextSerializer $serializer, $exceptionMap) {
         $this->serializer = $serializer;
+
+        $this->exceptionMap = array();
+
+        foreach($exceptionMap as $className => $callback) {
+            // normalize and check class name
+            $class = new \ReflectionClass($className);
+            $this->exceptionMap[$class->getName()] = $callback;
+        }
     }
 
-    public function invoke($app, $methodName, $internFunc, $externFunc) {
+    public function invoke($app, $methodName) {
         // error -> exception converter
         set_error_handler(function ($errno, $errstr, $errfile, $errline) {
             // ignore errors when @ operator is used
@@ -31,7 +40,7 @@ class Handler {
         });
 
         try {
-            $this->invokeSafe($app, $methodName, $internFunc, $externFunc);
+            $this->invokeSafe($app, $methodName);
         } catch(\Exception $e) {
             // always clean up handler
             restore_error_handler();
@@ -42,7 +51,7 @@ class Handler {
         restore_error_handler();
     }
 
-    private function invokeSafe($app, $methodName, $internFunc, $externFunc) {
+    private function invokeSafe($app, $methodName) {
         // check for GPC slashes kid-gloves
         if (get_magic_quotes_gpc()) {
             throw new \Exception('magic_quotes_gpc mode must not be enabled');
@@ -79,9 +88,9 @@ class Handler {
             }
 
             try {
-                $apiParameterList[] = $class ? $internFunc($class->getName(), $value) : $value;
+                $apiParameterList[] = $this->serializer->import($class->getName(), $value);
             } catch(\Exception $e) {
-                $fieldErrors->$param = $externFunc($e);
+                $fieldErrors->$param = $this->exportException($e);
             }
         }
 
@@ -106,7 +115,7 @@ class Handler {
 
             // report exception
             // using dedicated 500 status (syntax was OK but server-side error)
-            self::report($app, $methodName, $publicRequestValues, 500, json_encode($externFunc($e)));
+            self::report($app, $methodName, $publicRequestValues, 500, json_encode($this->exportException($e)));
             return;
         }
 
@@ -116,7 +125,7 @@ class Handler {
         header('Content-Type: text/json');
 
         $output = array();
-        self::jsonPrint($result, $externFunc, $output);
+        $this->jsonPrint($result, $output);
         self::report($app, $methodName, $publicRequestValues, 200, join('', $output));
     }
 
@@ -156,29 +165,24 @@ class Handler {
         echo $jsonData;
     }
 
-    private static function jsonPrint($result, $externFunc, &$output) {
-        if (is_object($result)) {
-            if (get_class($result) === 'stdClass') {
-                // anonymous object
-                $first = true;
+    private function jsonPrint($result, &$output) {
+        if (get_class($result) === 'stdClass') {
+            // anonymous object
+            $first = true;
 
-                $output[] = '{';
-                foreach ($result as $k => $v) {
-                    if ($first) {
-                        $first = false;
-                    } else {
-                        $output[] = ',';
-                    }
-
-                    $output[] = json_encode($k);
-                    $output[] = ':';
-                    self::jsonPrint($v, $externFunc, $output);
+            $output[] = '{';
+            foreach ($result as $k => $v) {
+                if ($first) {
+                    $first = false;
+                } else {
+                    $output[] = ',';
                 }
-                $output[] = '}';
-            } else {
-                // identity instance
-                $output[] = json_encode($externFunc($result));
+
+                $output[] = json_encode($k);
+                $output[] = ':';
+                $this->jsonPrint($v, $output);
             }
+            $output[] = '}';
         } elseif (is_array($result)) {
             $first = true;
 
@@ -190,12 +194,26 @@ class Handler {
                     $output[] = ',';
                 }
 
-                self::jsonPrint($v, $externFunc, $output);
+                $this->jsonPrint($v, $output);
             }
             $output[] = ']';
         } else {
-            $output[] = json_encode($result);
+            // pipe everything else through the exporter
+            $output[] = json_encode($this->serializer->export($result));
         }
+    }
+
+    private function exportException($e) {
+        $class = new \ReflectionClass($e);
+
+        foreach ($this->exceptionMap as $rootClassName => $callback) {
+            if ($class->getName() === $rootClassName || $class->isSubclassOf($rootClassName)) {
+                return $callback($e);
+            }
+        }
+
+        // unhandled exception, re-throw
+        throw $e;
     }
 }
 
