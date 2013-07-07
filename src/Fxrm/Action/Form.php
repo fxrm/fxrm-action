@@ -118,7 +118,7 @@ class Form {
             case 'hidden':
             case 'text':
             case 'password':
-                $inputName = $type === 'password' ? ".$fieldName" : $fieldName;
+                $inputName = $type === 'password' ? "$fieldName\$" : $fieldName;
 
                 echo '<input type="' . htmlspecialchars($type) . '" name="' . htmlspecialchars($inputName) . '" value="' . htmlspecialchars($inputValue) . '" />';
 

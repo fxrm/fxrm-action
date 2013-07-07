@@ -74,14 +74,14 @@ class Handler {
 
             $value = null;
 
-            // @todo IMPORTANT: the "_" in private params is actually supposed to be a dot (Unix-y metaphor) - manually parse query? or use other marker
+            // try corresponding parameter name, or append a $ for private (e.g. password) fields
             if (isset($_REQUEST[$param])) {
                 $value = $_REQUEST[$param];
 
                 // save public values to be sent back as necessary
                 $publicRequestValues->$param = $value;
-            } elseif (isset($_REQUEST["_$param"])) {
-                $value = $_REQUEST["_$param"];
+            } elseif (isset($_REQUEST["$param\$"])) {
+                $value = $_REQUEST["$param\$"];
 
                 // not sending back private values
                 $publicRequestValues->$param = null;
