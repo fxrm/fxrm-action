@@ -19,12 +19,8 @@ class Context {
         $this->serializer = new ContextSerializer($constructCallback, $serializerMap, $exceptionMap);
     }
 
-    public function createForm($id, $endpointUrl, $app, $methodName) {
-        return new Form($this->serializer, $id, $endpointUrl, $app, $methodName);
-    }
-
-    public function createHandler($className, $callback) {
-        return new Handler($this->serializer, $className, $callback);
+    public function createHandler($className) {
+        return new Handler($this->serializer, $className);
     }
 }
 

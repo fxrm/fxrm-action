@@ -15,6 +15,7 @@ namespace Fxrm\Action;
 class Handler {
     private $serializer;
     private $instance;
+    private $instanceFingerprint;
 
     function __construct(ContextSerializer $serializer, $className) {
         $this->serializer = $serializer;
@@ -28,6 +29,7 @@ class Handler {
         // @todo deal with these exceptions gracefully? shouldn't it be a 404 though
         $class = new \ReflectionClass($className);
         $argumentList = array();
+        $rawArgumentList = array();
 
         foreach ($class->getConstructor()->getParameters() as $param) {
             $paramName = $param->getName();
@@ -35,10 +37,24 @@ class Handler {
 
             $value = isset($_GET[$paramName]) ? $_GET[$paramName] : null;
 
+            $rawArgumentList[] = $value;
             $argumentList[] = $this->serializer->import($paramClass ? $paramClass->getName() : null, $value);
         }
 
         $this->instance = $this->serializer->constructArgs($class->getName(), $argumentList);
+        $this->instanceFingerprint = array($className, $rawArgumentList);
+    }
+
+    public function createForm($endpointUrl, $methodName, $formDifferentiator = null) {
+        $formSignature = $this->instanceFingerprint;
+        $formSignature[] = $methodName;
+        $formSignature[] = $formDifferentiator;
+
+        return new Form($this->serializer, md5(json_encode($formSignature)), $endpointUrl, $this->instance, $methodName);
+    }
+
+    public function getInstance() {
+        return $this->instance;
     }
 
     public function invoke($methodName) {

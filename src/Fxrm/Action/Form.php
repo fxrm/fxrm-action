@@ -22,13 +22,13 @@ class Form {
     private $returnValue, $fieldError, $actionError, $hasReturnValue;
 
     // @todo endpoint URL should be inferred as a *serialization of app instance + method name*
-    function __construct(ContextSerializer $serializer, $id, $endpointUrl, $app, $methodName) {
+    function __construct(ContextSerializer $serializer, $formSignature, $endpointUrl, $app, $methodName) {
         $this->serializer = $serializer;
 
         $classInfo = new \ReflectionClass($app);
         $methodInfo = $classInfo->getMethod($methodName);
 
-        $this->url = $endpointUrl === null ? $endpointUrl : $this->addUrlRedirectHash($endpointUrl, md5($id));
+        $this->url = $endpointUrl === null ? $endpointUrl : $this->addUrlRedirectHash($endpointUrl, $formSignature);
         $this->paramTypes = (object)array();
 
         foreach ($methodInfo->getParameters() as $param) {
@@ -40,10 +40,10 @@ class Form {
 
         // parse errors if given via query-string payload
         // @todo preserve field values across submits! ugh but then URL limits start being hit - cache those temporarily?
-        if (isset($_GET['$_']) && $id !== null) {
+        if (isset($_GET['$_'])) {
             $payload = explode("\x00", base64_decode($_GET['$_']), 4);
 
-            if (count($payload) === 4 && $payload[0] === md5($id)) {
+            if (count($payload) === 4 && $payload[0] === $formSignature) {
                 $fieldValues = json_decode($payload[1]);
                 $status = $payload[2];
                 $data = json_decode($payload[3]);
