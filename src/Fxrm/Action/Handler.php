@@ -14,12 +14,34 @@ namespace Fxrm\Action;
  */
 class Handler {
     private $serializer;
+    private $instance;
 
-    function __construct(ContextSerializer $serializer) {
+    function __construct(ContextSerializer $serializer, $className, $callback) {
         $this->serializer = $serializer;
+
+        // check for GPC slashes kid-gloves
+        if (get_magic_quotes_gpc()) {
+            throw new \Exception('magic_quotes_gpc mode must not be enabled');
+        }
+
+        // collect arguments
+        // @todo deal with these exceptions gracefully? shouldn't it be a 404 though
+        $class = new \ReflectionClass($className);
+        $argumentList = array();
+
+        foreach ($class->getConstructor()->getParameters() as $param) {
+            $paramName = $param->getName();
+            $paramClass = $param->getClass();
+
+            $value = isset($_GET[$paramName]) ? $_GET[$paramName] : null;
+
+            $argumentList[] = $this->serializer->import($paramClass ? $paramClass->getName() : null, $value);
+        }
+
+        $this->instance = call_user_func_array($callback, $argumentList);
     }
 
-    public function invoke($app, $methodName, $exceptionMap) {
+    public function invoke($methodName, $exceptionMap) {
         // error -> exception converter
         set_error_handler(function ($errno, $errstr, $errfile, $errline) {
             // ignore errors when @ operator is used
@@ -31,7 +53,7 @@ class Handler {
         });
 
         try {
-            $this->invokeSafe($app, $methodName, $exceptionMap);
+            $this->invokeSafe($methodName, $exceptionMap);
         } catch(\Exception $e) {
             // always clean up handler
             restore_error_handler();
@@ -42,15 +64,10 @@ class Handler {
         restore_error_handler();
     }
 
-    private function invokeSafe($app, $methodName, $exceptionMap) {
-        // check for GPC slashes kid-gloves
-        if (get_magic_quotes_gpc()) {
-            throw new \Exception('magic_quotes_gpc mode must not be enabled');
-        }
-
+    private function invokeSafe($methodName, $exceptionMap) {
         // @todo check for POST method
 
-        $bodyFunctionInfo = new \ReflectionMethod($app, $methodName);
+        $bodyFunctionInfo = new \ReflectionMethod($this->instance, $methodName);
 
         // collect necessary parameter data
         $apiParameterList = array();
@@ -88,7 +105,7 @@ class Handler {
         // report field validation errors
         if (count((array)$fieldErrors) > 0) {
             // using dedicated 400 status (bad client request syntax)
-            self::report($app, $methodName, $publicRequestValues, 400, json_encode($fieldErrors));
+            self::report($this->instance, $methodName, $publicRequestValues, 400, json_encode($fieldErrors));
             return;
         }
 
@@ -96,7 +113,7 @@ class Handler {
         ob_start();
 
         try {
-            $result = $bodyFunctionInfo->invokeArgs($app, $apiParameterList);
+            $result = $bodyFunctionInfo->invokeArgs($this->instance, $apiParameterList);
 
             if (ob_get_length() > 0) {
                 throw new \Exception('unexpected output');
@@ -106,7 +123,7 @@ class Handler {
 
             // report exception
             // using dedicated 500 status (syntax was OK but server-side error)
-            self::report($app, $methodName, $publicRequestValues, 500, json_encode($this->exportException($e)));
+            self::report($this->instance, $methodName, $publicRequestValues, 500, json_encode($this->exportException($e)));
             return;
         }
 
@@ -117,7 +134,7 @@ class Handler {
 
         $output = array();
         $this->jsonPrint($result, $output);
-        self::report($app, $methodName, $publicRequestValues, 200, join('', $output));
+        self::report($this->instance, $methodName, $publicRequestValues, 200, join('', $output));
     }
 
     private static function report($app, $methodName, $fieldValues, $httpStatus, $jsonData) {
