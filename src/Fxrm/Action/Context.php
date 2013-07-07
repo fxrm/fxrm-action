@@ -23,8 +23,8 @@ class Context {
         return new Form($this->serializer, $id, $endpointUrl, $app, $methodName);
     }
 
-    public function createHandler($exceptionMap) {
-        return new Handler($this->serializer, $exceptionMap);
+    public function createHandler() {
+        return new Handler($this->serializer);
     }
 }
 

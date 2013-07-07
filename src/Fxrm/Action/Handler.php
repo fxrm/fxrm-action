@@ -14,21 +14,12 @@ namespace Fxrm\Action;
  */
 class Handler {
     private $serializer;
-    private $exceptionMap;
 
-    function __construct(ContextSerializer $serializer, $exceptionMap) {
+    function __construct(ContextSerializer $serializer) {
         $this->serializer = $serializer;
-
-        $this->exceptionMap = array();
-
-        foreach($exceptionMap as $className => $callback) {
-            // normalize and check class name
-            $class = new \ReflectionClass($className);
-            $this->exceptionMap[$class->getName()] = $callback;
-        }
     }
 
-    public function invoke($app, $methodName) {
+    public function invoke($app, $methodName, $exceptionMap) {
         // error -> exception converter
         set_error_handler(function ($errno, $errstr, $errfile, $errline) {
             // ignore errors when @ operator is used
@@ -40,7 +31,7 @@ class Handler {
         });
 
         try {
-            $this->invokeSafe($app, $methodName);
+            $this->invokeSafe($app, $methodName, $exceptionMap);
         } catch(\Exception $e) {
             // always clean up handler
             restore_error_handler();
@@ -51,7 +42,7 @@ class Handler {
         restore_error_handler();
     }
 
-    private function invokeSafe($app, $methodName) {
+    private function invokeSafe($app, $methodName, $exceptionMap) {
         // check for GPC slashes kid-gloves
         if (get_magic_quotes_gpc()) {
             throw new \Exception('magic_quotes_gpc mode must not be enabled');
@@ -75,13 +66,13 @@ class Handler {
             $value = null;
 
             // try corresponding parameter name, or append a $ for private (e.g. password) fields
-            if (isset($_REQUEST[$param])) {
-                $value = $_REQUEST[$param];
+            if (isset($_POST[$param])) {
+                $value = $_POST[$param];
 
                 // save public values to be sent back as necessary
                 $publicRequestValues->$param = $value;
-            } elseif (isset($_REQUEST["$param\$"])) {
-                $value = $_REQUEST["$param\$"];
+            } elseif (isset($_POST["$param\$"])) {
+                $value = $_POST["$param\$"];
 
                 // not sending back private values
                 $publicRequestValues->$param = null;
@@ -90,7 +81,7 @@ class Handler {
             try {
                 $apiParameterList[] = $this->serializer->import($class->getName(), $value);
             } catch(\Exception $e) {
-                $fieldErrors->$param = $this->exportException($e);
+                $fieldErrors->$param = $this->exportException($exceptionMap, $e);
             }
         }
 
@@ -203,10 +194,10 @@ class Handler {
         }
     }
 
-    private function exportException($e) {
+    private function exportException($exceptionMap, $e) {
         $class = new \ReflectionClass($e);
 
-        foreach ($this->exceptionMap as $rootClassName => $callback) {
+        foreach ($exceptionMap as $rootClassName => $callback) {
             if ($class->getName() === $rootClassName || $class->isSubclassOf($rootClassName)) {
                 return $callback($e);
             }
