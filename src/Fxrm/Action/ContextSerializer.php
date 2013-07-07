@@ -11,14 +11,21 @@ class ContextSerializer {
     private $constructCallback;
     private $serializerMap;
 
-    function __construct($constructCallback, $serializerMap) {
+    function __construct($constructCallback, $serializerMap, $exceptionMap) {
         $this->constructCallback = $constructCallback;
         $this->serializerMap = array();
+        $this->exceptionMap = array();
 
         foreach($serializerMap as $className => $ser) {
             // normalize and check class name
             $class = new \ReflectionClass($className);
             $this->serializerMap[$class->getName()] = $ser;
+        }
+
+        foreach($exceptionMap as $className => $callback) {
+            // normalize and check class name
+            $class = new \ReflectionClass($className);
+            $this->exceptionMap[$class->getName()] = $callback;
         }
     }
 
@@ -42,6 +49,19 @@ class ContextSerializer {
         }
 
         return $this->findSerializer($className)->export($object);
+    }
+
+    function exportException($e) {
+        $class = new \ReflectionClass($e);
+
+        foreach ($this->exceptionMap as $rootClassName => $callback) {
+            if ($class->getName() === $rootClassName || $class->isSubclassOf($rootClassName)) {
+                return $callback($e);
+            }
+        }
+
+        // unhandled exception, re-throw
+        throw $e;
     }
 
     private function findSerializer($className) {

@@ -15,8 +15,8 @@ class Context {
 
     private $serializer;
 
-    public function __construct($constructCallback, $serializerMap) {
-        $this->serializer = new ContextSerializer($constructCallback, $serializerMap);
+    public function __construct($constructCallback, $serializerMap, $exceptionMap) {
+        $this->serializer = new ContextSerializer($constructCallback, $serializerMap, $exceptionMap);
     }
 
     public function createForm($id, $endpointUrl, $app, $methodName) {

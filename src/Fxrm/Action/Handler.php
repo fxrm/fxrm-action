@@ -41,7 +41,7 @@ class Handler {
         $this->instance = $this->serializer->constructArgs($class->getName(), $argumentList);
     }
 
-    public function invoke($methodName, $exceptionMap) {
+    public function invoke($methodName) {
         // error -> exception converter
         set_error_handler(function ($errno, $errstr, $errfile, $errline) {
             // ignore errors when @ operator is used
@@ -53,7 +53,7 @@ class Handler {
         });
 
         try {
-            $this->invokeSafe($methodName, $exceptionMap);
+            $this->invokeSafe($methodName);
         } catch(\Exception $e) {
             // always clean up handler
             restore_error_handler();
@@ -64,7 +64,7 @@ class Handler {
         restore_error_handler();
     }
 
-    private function invokeSafe($methodName, $exceptionMap) {
+    private function invokeSafe($methodName) {
         // @todo check for POST method
 
         $bodyFunctionInfo = new \ReflectionMethod($this->instance, $methodName);
@@ -98,7 +98,7 @@ class Handler {
             try {
                 $apiParameterList[] = $this->serializer->import($class->getName(), $value);
             } catch(\Exception $e) {
-                $fieldErrors->$param = $this->exportException($exceptionMap, $e);
+                $fieldErrors->$param = $this->serializer->exportException($e);
             }
         }
 
@@ -209,19 +209,6 @@ class Handler {
             // pipe everything else through the exporter
             $output[] = json_encode($this->serializer->export($result));
         }
-    }
-
-    private function exportException($exceptionMap, $e) {
-        $class = new \ReflectionClass($e);
-
-        foreach ($exceptionMap as $rootClassName => $callback) {
-            if ($class->getName() === $rootClassName || $class->isSubclassOf($rootClassName)) {
-                return $callback($e);
-            }
-        }
-
-        // unhandled exception, re-throw
-        throw $e;
     }
 }
 
