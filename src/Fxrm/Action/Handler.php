@@ -15,7 +15,7 @@ namespace Fxrm\Action;
 class Handler {
     private $serializer;
     private $instance;
-    private $instanceFingerprint;
+    private $instanceArgumentMap;
 
     function __construct(ContextSerializer $serializer, $className) {
         $this->serializer = $serializer;
@@ -29,7 +29,7 @@ class Handler {
         // @todo deal with these exceptions gracefully? shouldn't it be a 404 though
         $class = new \ReflectionClass($className);
         $argumentList = array();
-        $rawArgumentList = array();
+        $rawArgumentMap = array();
 
         foreach ($class->getConstructor()->getParameters() as $param) {
             $paramName = $param->getName();
@@ -37,20 +37,25 @@ class Handler {
 
             $value = isset($_GET[$paramName]) ? $_GET[$paramName] : null;
 
-            $rawArgumentList[] = $value;
+            $rawArgumentMap[$paramName] = $value;
             $argumentList[] = $this->serializer->import($paramClass ? $paramClass->getName() : null, $value);
         }
 
         $this->instance = $this->serializer->constructArgs($class->getName(), $argumentList);
-        $this->instanceFingerprint = array($className, $rawArgumentList);
+        $this->instanceArgumentMap = $rawArgumentMap;
     }
 
     public function createForm($endpointUrl, $methodName, $formDifferentiator = null) {
-        $formSignature = $this->instanceFingerprint;
-        $formSignature[] = $methodName;
-        $formSignature[] = $formDifferentiator;
+        $formSignature = array(
+            get_class($this->instance),
+            $this->instanceArgumentMap,
+            $methodName,
+            $formDifferentiator
+        );
 
-        return new Form($this->serializer, md5(json_encode($formSignature)), $endpointUrl, $this->instance, $methodName);
+        $instanceEndpointUrl = $this->addUrlInstanceArguments($endpointUrl);
+
+        return new Form($this->serializer, md5(json_encode($formSignature)), $instanceEndpointUrl, $this->instance, $methodName);
     }
 
     public function getInstance() {
@@ -121,7 +126,7 @@ class Handler {
         // report field validation errors
         if (count((array)$fieldErrors) > 0) {
             // using dedicated 400 status (bad client request syntax)
-            $this->report($this->instance, $methodName, $publicRequestValues, 400, json_encode($fieldErrors));
+            $this->report($publicRequestValues, 400, json_encode($fieldErrors));
             return;
         }
 
@@ -139,7 +144,7 @@ class Handler {
 
             // report exception
             // using dedicated 500 status (syntax was OK but server-side error)
-            $this->report($this->instance, $methodName, $publicRequestValues, 500, json_encode($this->exportException($e)));
+            $this->report($publicRequestValues, 500, json_encode($this->exportException($e)));
             return;
         }
 
@@ -150,10 +155,10 @@ class Handler {
 
         $output = array();
         $this->jsonPrint($result, $output);
-        $this->report($this->instance, $methodName, $publicRequestValues, 200, join('', $output));
+        $this->report($publicRequestValues, 200, join('', $output));
     }
 
-    private function report($app, $methodName, $fieldValues, $httpStatus, $jsonData) {
+    private function report($fieldValues, $httpStatus, $jsonData) {
         // non-AJAX mode
         if (isset($_GET['redirect']) && isset($_SERVER['HTTP_REFERER'])) {
             // identify which form on the originating page this is intended for
@@ -225,6 +230,15 @@ class Handler {
             // pipe everything else through the exporter
             $output[] = json_encode($this->serializer->export($result));
         }
+    }
+
+    private function addUrlInstanceArguments($url) {
+        $urlParts = explode('?', $url, 2);
+
+        $baseUrl = $urlParts[0];
+        $query = (count($urlParts) === 2 ? $urlParts[1] . '&' : '') . http_build_query($this->instanceArgumentMap);
+
+        return $baseUrl . '?' . $query;
     }
 }
 
