@@ -16,7 +16,7 @@ class Handler {
     private $serializer;
     private $instance;
 
-    function __construct(ContextSerializer $serializer, $className, $callback) {
+    function __construct(ContextSerializer $serializer, $className) {
         $this->serializer = $serializer;
 
         // check for GPC slashes kid-gloves
@@ -38,7 +38,7 @@ class Handler {
             $argumentList[] = $this->serializer->import($paramClass ? $paramClass->getName() : null, $value);
         }
 
-        $this->instance = call_user_func_array($callback, $argumentList);
+        $this->instance = $this->serializer->constructArgs($class->getName(), $argumentList);
     }
 
     public function invoke($methodName, $exceptionMap) {
@@ -105,7 +105,7 @@ class Handler {
         // report field validation errors
         if (count((array)$fieldErrors) > 0) {
             // using dedicated 400 status (bad client request syntax)
-            self::report($this->instance, $methodName, $publicRequestValues, 400, json_encode($fieldErrors));
+            $this->report($this->instance, $methodName, $publicRequestValues, 400, json_encode($fieldErrors));
             return;
         }
 
@@ -123,7 +123,7 @@ class Handler {
 
             // report exception
             // using dedicated 500 status (syntax was OK but server-side error)
-            self::report($this->instance, $methodName, $publicRequestValues, 500, json_encode($this->exportException($e)));
+            $this->report($this->instance, $methodName, $publicRequestValues, 500, json_encode($this->exportException($e)));
             return;
         }
 
@@ -134,10 +134,10 @@ class Handler {
 
         $output = array();
         $this->jsonPrint($result, $output);
-        self::report($this->instance, $methodName, $publicRequestValues, 200, join('', $output));
+        $this->report($this->instance, $methodName, $publicRequestValues, 200, join('', $output));
     }
 
-    private static function report($app, $methodName, $fieldValues, $httpStatus, $jsonData) {
+    private function report($app, $methodName, $fieldValues, $httpStatus, $jsonData) {
         // non-AJAX mode
         if (isset($_GET['redirect']) && isset($_SERVER['HTTP_REFERER'])) {
             // identify which form on the originating page this is intended for

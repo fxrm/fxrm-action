@@ -8,9 +8,11 @@
 namespace Fxrm\Action;
 
 class ContextSerializer {
+    private $constructCallback;
     private $serializerMap;
 
-    function __construct($serializerMap) {
+    function __construct($constructCallback, $serializerMap) {
+        $this->constructCallback = $constructCallback;
         $this->serializerMap = array();
 
         foreach($serializerMap as $className => $ser) {
@@ -18,6 +20,10 @@ class ContextSerializer {
             $class = new \ReflectionClass($className);
             $this->serializerMap[$class->getName()] = $ser;
         }
+    }
+
+    function constructArgs($className, $argumentList) {
+        return call_user_func($this->constructCallback, $className, $argumentList);
     }
 
     function import($className, $value) {
