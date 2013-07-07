@@ -110,7 +110,9 @@ class Form {
 
         unset($this->paramTypes->$fieldName);
 
-        $inputValue = property_exists($this->fieldValues, $fieldName) ? $this->fieldValues->$fieldName : $initialValue;
+        $inputValue = property_exists($this->fieldValues, $fieldName) ?
+            $this->fieldValues->$fieldName :
+            $this->serializer->export($initialValue);
 
         switch($type) {
             case 'hidden':
