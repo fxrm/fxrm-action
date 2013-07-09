@@ -19,8 +19,6 @@ class Form {
     private $fieldValues;
     private $returnValue, $fieldError, $actionError, $hasReturnValue;
 
-    private static $PRIVATE_SUFFIX = ':private';
-
     public static function setupErrorHandler() {
         // error -> exception converter
         set_error_handler(function ($errno, $errstr, $errfile, $errline) {
@@ -154,7 +152,7 @@ class Form {
         echo $jsonData;
     }
 
-    function __construct(Service $service, $baseUrl, $paramMap, $methodName, $initialValueMap, $formDifferentiator = null) {
+    function __construct(Service $service, $baseUrl, $paramMap, $methodName, $formDifferentiator = null) {
         $this->serializer = $service->getSerializer();
 
         $classInfo = new \ReflectionClass($service->getClassName());
@@ -167,13 +165,10 @@ class Form {
 
         $this->url = $this->addUrlRedirectHash($serviceUrl, $formSignature);
         $this->paramTypes = (object)array();
-        $this->initialValueMap = (object)array();
 
         foreach ($methodInfo->getParameters() as $param) {
             $paramClass = $param->getClass();
-            $paramName = $param->getName();
-            $this->paramTypes->{$paramName} = $paramClass ? $paramClass->getName() : null;
-            $this->initialValueMap->{$paramName} = isset($initialValueMap[$paramName]) ? $initialValueMap[$paramName] : null;
+            $this->paramTypes->{$param->getName()} = $paramClass ? $paramClass->getName() : null;
         }
 
         $this->fieldValues = (object)array();
@@ -199,48 +194,49 @@ class Form {
         }
     }
 
-    function url() {
+    function getUrl() {
         return $this->url;
     }
 
-    function success() {
-        return $this->hasReturnValue ? (object)array('value' => $this->returnValue) : null;
+    function getSuccessStatus() {
+        return $this->hasReturnValue;
     }
 
-    function error() {
+    function getSuccessValue() {
+        // explicitly encourage to check first - null may be valid return value
+        if ( ! $this->hasReturnValue) {
+            throw new \Exception('no return value');
+        }
+
+        return $this->returnValue;
+    }
+
+    function getError() {
         return $this->actionError;
     }
 
-    function __isset($fieldName) {
-        $isPrivate = substr($fieldName, -strlen(self::$PRIVATE_SUFFIX)) === self::$PRIVATE_SUFFIX;
-
-        if ($isPrivate) {
-            $fieldName = substr($fieldName, 0, -strlen(self::$PRIVATE_SUFFIX));
-        }
-
+    function getFieldExists($fieldName) {
         return property_exists($this->paramTypes, $fieldName);
     }
 
-    function __get($fieldName) {
-        $isPrivate = substr($fieldName, -strlen(self::$PRIVATE_SUFFIX)) === self::$PRIVATE_SUFFIX;
-
-        if ($isPrivate) {
-            $fieldName = substr($fieldName, 0, -strlen(self::$PRIVATE_SUFFIX));
-        }
-
+    function getFieldValue($fieldName, $initialValue = null) {
         if ( ! property_exists($this->paramTypes, $fieldName)) {
             throw new \Exception('unknown field ' . $fieldName);
         }
 
-        return (object)array(
-            'inputName' => $isPrivate ? "$fieldName\$" : $fieldName,
-            'inputValue' => property_exists($this->fieldValues, $fieldName) ?
-                $this->fieldValues->$fieldName :
-                $this->serializer->export($this->initialValueMap->$fieldName), // @todo initial value set
-            'error' => $this->fieldError === null ?
-                null :
-                (property_exists($this->fieldError, $fieldName) ? $this->fieldError->$fieldName : null)
-        );
+        return property_exists($this->fieldValues, $fieldName) ?
+            $this->fieldValues->$fieldName :
+            $this->serializer->export($initialValue);
+    }
+
+    function getFieldError($fieldName) {
+        if ( ! property_exists($this->paramTypes, $fieldName)) {
+            throw new \Exception('unknown field ' . $fieldName);
+        }
+
+        return $this->fieldError === null ?
+            null :
+            (property_exists($this->fieldError, $fieldName) ? $this->fieldError->$fieldName : null);
     }
 
     private function addUrlRedirectHash($url, $hash) {

@@ -45,6 +45,10 @@ class Service {
         $rawParamMap = array();
 
         foreach ($this->argumentMap as $name => $className) {
+            if ( !array_key_exists($name, $paramMap)) {
+                throw new \Exception('missing argument ' . $name);
+            }
+
             $rawParamMap[$name] = $this->serializer->export($paramMap[$name]);
         }
 
