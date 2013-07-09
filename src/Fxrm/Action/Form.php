@@ -14,12 +14,12 @@ namespace Fxrm\Action;
 class Form {
     private $serializer;
 
-    private $stage = 0;
-
     private $url;
     private $paramTypes;
     private $fieldValues;
     private $returnValue, $fieldError, $actionError, $hasReturnValue;
+
+    private static $PRIVATE_SUFFIX = ':private';
 
     public static function setupErrorHandler() {
         // error -> exception converter
@@ -68,7 +68,7 @@ class Form {
             }
 
             try {
-                $apiParameterList[] = $service->getSerializer()->import($class->getName(), $value);
+                $apiParameterList[] = $service->getSerializer()->import($class === null ? null : $class->getName(), $value);
             } catch(\Exception $e) {
                 $fieldErrors->$param = $service->getSerializer()->exportException($e);
             }
@@ -115,7 +115,7 @@ class Form {
         // result output
         header('Content-Type: text/json');
 
-        self::report($publicRequestValues, 200, $service->getSerializer()->export($result));
+        self::report($publicRequestValues, 200, json_encode($service->getSerializer()->export($result)));
     }
 
     private static function report($fieldValues, $httpStatus, $jsonData) {
@@ -154,7 +154,7 @@ class Form {
         echo $jsonData;
     }
 
-    function __construct(Service $service, $baseUrl, $paramMap, $methodName, $formDifferentiator = null) {
+    function __construct(Service $service, $baseUrl, $paramMap, $methodName, $initialValueMap, $formDifferentiator = null) {
         $this->serializer = $service->getSerializer();
 
         $classInfo = new \ReflectionClass($service->getClassName());
@@ -167,10 +167,13 @@ class Form {
 
         $this->url = $this->addUrlRedirectHash($serviceUrl, $formSignature);
         $this->paramTypes = (object)array();
+        $this->initialValueMap = (object)array();
 
         foreach ($methodInfo->getParameters() as $param) {
             $paramClass = $param->getClass();
-            $this->paramTypes->{$param->getName()} = $paramClass ? $paramClass->getName() : null;
+            $paramName = $param->getName();
+            $this->paramTypes->{$paramName} = $paramClass ? $paramClass->getName() : null;
+            $this->initialValueMap->{$paramName} = isset($initialValueMap[$paramName]) ? $initialValueMap[$paramName] : null;
         }
 
         $this->fieldValues = (object)array();
@@ -196,39 +199,48 @@ class Form {
         }
     }
 
-    function hasReturnValue() {
-        return $this->hasReturnValue;
+    function url() {
+        return $this->url;
     }
 
-    function getReturnValue() {
-        // explicitly encouraging checking status first (null may be valid return value)
-        if ( ! $this->hasReturnValue) {
-            throw new \Exception('action did not return value');
-        }
-
-        return $this->returnValue;
+    function success() {
+        return $this->hasReturnValue ? (object)array('value' => $this->returnValue) : null;
     }
 
-    function getActionError() {
+    function error() {
         return $this->actionError;
     }
 
-    function getFieldError($fieldName) {
-        if ($this->fieldError === null) {
-            return null;
+    function __isset($fieldName) {
+        $isPrivate = substr($fieldName, -strlen(self::$PRIVATE_SUFFIX)) === self::$PRIVATE_SUFFIX;
+
+        if ($isPrivate) {
+            $fieldName = substr($fieldName, 0, -strlen(self::$PRIVATE_SUFFIX));
         }
 
-        return isset($this->fieldError->$fieldName) ? $this->fieldError->$fieldName : null;
+        return property_exists($this->paramTypes, $fieldName);
     }
 
-    function start() {
-        if ($this->stage !== 0) {
-            throw new \Exception('form already started');
+    function __get($fieldName) {
+        $isPrivate = substr($fieldName, -strlen(self::$PRIVATE_SUFFIX)) === self::$PRIVATE_SUFFIX;
+
+        if ($isPrivate) {
+            $fieldName = substr($fieldName, 0, -strlen(self::$PRIVATE_SUFFIX));
         }
 
-        $this->stage = 1;
+        if ( ! property_exists($this->paramTypes, $fieldName)) {
+            throw new \Exception('unknown field ' . $fieldName);
+        }
 
-        echo '<form action="' . htmlspecialchars($this->url) . '" method="post">';
+        return (object)array(
+            'inputName' => $isPrivate ? "$fieldName\$" : $fieldName,
+            'inputValue' => property_exists($this->fieldValues, $fieldName) ?
+                $this->fieldValues->$fieldName :
+                $this->serializer->export($this->initialValueMap->$fieldName), // @todo initial value set
+            'error' => $this->fieldError === null ?
+                null :
+                (property_exists($this->fieldError, $fieldName) ? $this->fieldError->$fieldName : null)
+        );
     }
 
     private function addUrlRedirectHash($url, $hash) {
@@ -238,45 +250,6 @@ class Form {
         $query = (count($urlParts) === 2 ? $urlParts[1] . '&' : '') . 'redirect=' . rawurlencode($hash);
 
         return $baseUrl . '?' . $query;
-    }
-
-    function field($fieldName, $type, $initialValue = null, $options = null) {
-        if ( ! property_exists($this->paramTypes, $fieldName)) {
-            throw new \Exception('unknown/duplicate field');
-        }
-
-        unset($this->paramTypes->$fieldName);
-
-        $inputValue = property_exists($this->fieldValues, $fieldName) ?
-            $this->fieldValues->$fieldName :
-            $this->serializer->export($initialValue);
-
-        switch($type) {
-            case 'hidden':
-            case 'text':
-            case 'password':
-                $inputName = $type === 'password' ? "$fieldName\$" : $fieldName;
-
-                echo '<input type="' . htmlspecialchars($type) . '" name="' . htmlspecialchars($inputName) . '" value="' . htmlspecialchars($inputValue) . '" />';
-
-                break;
-            default:
-                throw new \Exception('unknown field type');
-        }
-    }
-
-    function end() {
-        if ($this->stage !== 1) {
-            throw new \Exception('form not ready to end');
-        }
-
-        $this->stage = 2;
-
-        echo '</form>';
-
-        if (count((array)$this->paramTypes) > 0) {
-            throw new \Exception('unimplemented form parameters: ' . join(', ', array_keys((array)$this->paramTypes)));
-        }
     }
 }
 
