@@ -21,11 +21,10 @@ class Form {
     private $fieldValues;
     private $returnValue, $fieldError, $actionError, $hasReturnValue;
 
-    // @todo endpoint URL should be inferred as a *serialization of app instance + method name*
-    function __construct(ContextSerializer $serializer, $formSignature, $endpointUrl, $app, $methodName) {
+    function __construct(ContextSerializer $serializer, $formSignature, $endpointUrl, $className, $methodName) {
         $this->serializer = $serializer;
 
-        $classInfo = new \ReflectionClass($app);
+        $classInfo = new \ReflectionClass($className);
         $methodInfo = $classInfo->getMethod($methodName);
 
         $this->url = $endpointUrl === null ? $endpointUrl : $this->addUrlRedirectHash($endpointUrl, $formSignature);

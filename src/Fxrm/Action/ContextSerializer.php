@@ -42,9 +42,9 @@ class ContextSerializer {
     }
 
     function export($object) {
-        $className = get_class($object);
+        $className = is_object($object) ? get_class($object) : null;
 
-        if ($className === FALSE || $object === null) {
+        if ($className === null || $object === null) {
             return $object;
         }
 

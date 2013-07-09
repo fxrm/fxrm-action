@@ -19,8 +19,8 @@ class Context {
         $this->serializer = new ContextSerializer($constructCallback, $serializerMap, $exceptionMap);
     }
 
-    public function createHandler($className) {
-        return new Handler($this->serializer, $className);
+    public function createService($className) {
+        return new Service($this->serializer, $className);
     }
 }
 
