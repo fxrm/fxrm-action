@@ -12,7 +12,7 @@ namespace Fxrm\Action;
  * Any service implementation may be passed in.
  */
 class Form {
-    private $serializer;
+    private $context;
 
     private $url;
     private $paramTypes;
@@ -31,13 +31,13 @@ class Form {
         });
     }
 
-    public static function invoke(Service $service, $methodName) {
+    public static function invoke(Context $ctx, $instance, $methodName) {
         // check for GPC slashes kid-gloves
         if (get_magic_quotes_gpc()) {
             throw new \Exception('magic_quotes_gpc mode must not be enabled');
         }
 
-        $bodyFunctionInfo = new \ReflectionMethod($service->getClassName(), $methodName);
+        $bodyFunctionInfo = new \ReflectionMethod($instance, $methodName);
 
         // collect necessary parameter data
         $apiParameterList = array();
@@ -66,9 +66,9 @@ class Form {
             }
 
             try {
-                $apiParameterList[] = $service->getSerializer()->import($class === null ? null : $class->getName(), $value);
+                $apiParameterList[] = $ctx->import($class === null ? null : $class->getName(), $value);
             } catch(\Exception $e) {
-                $fieldErrors->$param = $service->getSerializer()->exportException($e);
+                $fieldErrors->$param = $ctx->exportException($e);
             }
         }
 
@@ -83,17 +83,6 @@ class Form {
         ob_start();
 
         try {
-            $instance = $service->createInstance();
-        } catch(\Exception $e) {
-            ob_end_clean();
-
-            // report exception
-            // using dedicated 400 status (bad client request syntax)
-            self::report($publicRequestValues, 400, json_encode($service->getSerializer()->exportException($e)));
-            return;
-        }
-
-        try {
             $result = $bodyFunctionInfo->invokeArgs($instance, $apiParameterList);
 
             if (ob_get_length() > 0) {
@@ -104,7 +93,7 @@ class Form {
 
             // report exception
             // using dedicated 500 status (syntax was OK but server-side error)
-            self::report($publicRequestValues, 500, json_encode($service->getSerializer()->exportException($e)));
+            self::report($publicRequestValues, 500, json_encode($ctx->exportException($e)));
             return;
         }
 
@@ -113,7 +102,7 @@ class Form {
         // result output
         header('Content-Type: text/json');
 
-        self::report($publicRequestValues, 200, json_encode($service->getSerializer()->export($result)));
+        self::report($publicRequestValues, 200, json_encode($ctx->export($result)));
     }
 
     private static function report($fieldValues, $httpStatus, $jsonData) {
@@ -152,18 +141,15 @@ class Form {
         echo $jsonData;
     }
 
-    function __construct(Service $service, $baseUrl, $paramMap, $methodName, $formDifferentiator = null) {
-        $this->serializer = $service->getSerializer();
+    function __construct(Context $ctx, $url, $className, $methodName, $formDifferentiator = null) {
+        $this->context = $ctx;
 
-        $classInfo = new \ReflectionClass($service->getClassName());
-        $methodInfo = $classInfo->getMethod($methodName);
+        $methodInfo = new \ReflectionMethod($className, $methodName);
 
-        $serviceUrl = $service->generateUrl($baseUrl, $paramMap);
+        // basing form signature on service URL, since it is unique to this service instance + method by definition
+        $formSignature = md5(json_encode(array($url, $formDifferentiator)));
 
-        // basing form signature on service URL, since it is unique to this service instance by definition
-        $formSignature = md5(json_encode(array($serviceUrl, $methodName, $formDifferentiator)));
-
-        $this->url = $this->addUrlRedirectHash($serviceUrl, $formSignature);
+        $this->url = $this->addUrlRedirectHash($url, $formSignature);
         $this->paramTypes = (object)array();
 
         foreach ($methodInfo->getParameters() as $param) {
@@ -226,7 +212,7 @@ class Form {
 
         return property_exists($this->fieldValues, $fieldName) ?
             $this->fieldValues->$fieldName :
-            $this->serializer->export($initialValue);
+            $this->context->export($initialValue);
     }
 
     function getFieldError($fieldName) {
