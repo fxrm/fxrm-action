@@ -31,7 +31,47 @@ class Context {
         }
     }
 
-    function import($className, $value) {
+    public final function invoke($instance, $methodName, $getParameter, $report) {
+        $bodyFunctionInfo = new \ReflectionMethod($instance, $methodName);
+
+        // collect necessary parameter data
+        $apiParameterList = array();
+        $fieldErrors = (object)array();
+
+        foreach ($bodyFunctionInfo->getParameters() as $bodyFunctionParameter) {
+            $param = $bodyFunctionParameter->getName();
+            $class = $bodyFunctionParameter->getClass();
+
+            $value = $getParameter($param);
+
+            try {
+                $apiParameterList[] = $this->import($class === null ? null : $class->getName(), $value);
+            } catch(\Exception $e) {
+                $fieldErrors->$param = $this->exportException($e);
+            }
+        }
+
+        // report field validation errors
+        if (count((array)$fieldErrors) > 0) {
+            // using dedicated 400 status (bad client request syntax)
+            $report(400, json_encode($fieldErrors));
+            return;
+        }
+
+        try {
+            $result = $bodyFunctionInfo->invokeArgs($instance, $apiParameterList);
+        } catch(\Exception $e) {
+            // report exception
+            // using dedicated 500 status (syntax was OK but server-side error)
+            $report(500, json_encode($this->exportException($e)));
+            return;
+        }
+
+        // result output
+        $report(200, json_encode($this->export($result)));
+    }
+
+    private function import($className, $value) {
         if ($className === null || $value === null) {
             return $value;
         }
@@ -39,7 +79,7 @@ class Context {
         return $this->findSerializer($className)->import($className, $value);
     }
 
-    function export($object) {
+    private function export($object) {
         $className = is_object($object) ? get_class($object) : null;
 
         if ($className === null || $object === null) {
@@ -49,7 +89,7 @@ class Context {
         return $this->findSerializer($className)->export($object);
     }
 
-    function exportException($e) {
+    private function exportException($e) {
         $class = new \ReflectionClass($e);
 
         foreach ($this->exceptionMap as $rootClassName => $callback) {
