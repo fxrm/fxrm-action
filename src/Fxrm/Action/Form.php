@@ -37,22 +37,15 @@ class Form {
             throw new \Exception('magic_quotes_gpc mode must not be enabled');
         }
 
-        $bodyFunctionInfo = new \ReflectionMethod($instance, $methodName);
-
-        // collect necessary parameter data
-        $apiParameterList = array();
-
         // public request values are saved raw, before deserialization (the latter may fail)
         $publicRequestValues = (object)array();
-        $fieldErrors = (object)array();
 
-        foreach ($bodyFunctionInfo->getParameters() as $bodyFunctionParameter) {
-            $param = $bodyFunctionParameter->getName();
-            $class = $bodyFunctionParameter->getClass();
+        // catch any output
+        ob_start();
 
+        $ctx->invoke(function ($param) use($publicRequestValues) {
             $value = null;
 
-            // try corresponding parameter name, or append a $ for private (e.g. password) fields
             if (isset($_POST[$param])) {
                 $value = $_POST[$param];
 
@@ -65,80 +58,48 @@ class Form {
                 $publicRequestValues->$param = null;
             }
 
-            try {
-                $apiParameterList[] = $ctx->import($class === null ? null : $class->getName(), $value);
-            } catch(\Exception $e) {
-                $fieldErrors->$param = $ctx->exportException($e);
-            }
-        }
-
-        // report field validation errors
-        if (count((array)$fieldErrors) > 0) {
-            // using dedicated 400 status (bad client request syntax)
-            self::report($publicRequestValues, 400, json_encode($fieldErrors));
-            return;
-        }
-
-        // catch any output
-        ob_start();
-
-        try {
-            $result = $bodyFunctionInfo->invokeArgs($instance, $apiParameterList);
-
+            return $value;
+        }, function ($status, $jsonBody) use($publicRequestValues) {
             if (ob_get_length() > 0) {
                 throw new \Exception('unexpected output');
             }
-        } catch(\Exception $e) {
+
             ob_end_clean();
 
-            // report exception
-            // using dedicated 500 status (syntax was OK but server-side error)
-            self::report($publicRequestValues, 500, json_encode($ctx->exportException($e)));
-            return;
-        }
+            // non-AJAX mode
+            if (isset($_GET['redirect']) && isset($_SERVER['HTTP_REFERER'])) {
+                // identify which form on the originating page this is intended for
+                $formSignature = $_GET['redirect'];
 
-        ob_end_clean();
+                // work with referer URL query-string
+                $urlParts = explode('?', $_SERVER['HTTP_REFERER'], 2);
 
-        // result output
-        header('Content-Type: text/json');
+                $query = count($urlParts) > 1 ? $urlParts[1] : '';
 
-        self::report($publicRequestValues, 200, json_encode($ctx->export($result)));
-    }
+                // remove old payload
+                $queryParts = $query === '' ? array() : array_filter(explode('&', $query), function ($q) {
+                    return substr($q, 0, 3) !== '$_=';
+                });
 
-    private static function report($fieldValues, $httpStatus, $jsonData) {
-        // non-AJAX mode
-        if (isset($_GET['redirect']) && isset($_SERVER['HTTP_REFERER'])) {
-            // identify which form on the originating page this is intended for
-            $formSignature = $_GET['redirect'];
+                $queryParts[] = '$_=' . base64_encode(join("\x00", array($formSignature, json_encode($publicRequestValues), $httpStatus, $jsonData)));
 
-            // work with referer URL query-string
-            $urlParts = explode('?', $_SERVER['HTTP_REFERER'], 2);
+                // using the dedicated 303 response type
+                header('HTTP/1.1 303 See Other');
+                header('Location: ' . $urlParts[0] . '?' . join('&', $queryParts));
+                return;
+            }
 
-            $query = count($urlParts) > 1 ? $urlParts[1] : '';
+            // AJAX mode
+            $statusLabels = array(
+                200 => 'Success',
+                400 => 'Bad Syntax',
+                500 => 'Internal Error'
+            );
 
-            // remove old payload
-            $queryParts = $query === '' ? array() : array_filter(explode('&', $query), function ($q) {
-                return substr($q, 0, 3) !== '$_=';
-            });
-
-            $queryParts[] = '$_=' . base64_encode(join("\x00", array($formSignature, json_encode($fieldValues), $httpStatus, $jsonData)));
-
-            // using the dedicated 303 response type
-            header('HTTP/1.1 303 See Other');
-            header('Location: ' . $urlParts[0] . '?' . join('&', $queryParts));
-            return;
-        }
-
-        // AJAX mode
-        $statusLabels = array(
-            200 => 'Success',
-            400 => 'Bad Syntax',
-            500 => 'Internal Error'
-        );
-
-        header('HTTP/1.1 ' . $httpStatus . ' ' . $statusLabels[$httpStatus]);
-        header('Content-Type: text/json');
-        echo $jsonData;
+            header('HTTP/1.1 ' . $httpStatus . ' ' . $statusLabels[$httpStatus]);
+            header('Content-Type: text/json');
+            echo $jsonData;
+        });
     }
 
     function __construct(Context $ctx, $url, $className, $methodName, $formDifferentiator = null) {
