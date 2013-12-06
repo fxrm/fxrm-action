@@ -59,7 +59,7 @@ class Form {
             }
 
             return $value;
-        }, function ($status, $jsonBody) use($publicRequestValues) {
+        }, function ($status, $bodyData) use($publicRequestValues) {
             if (ob_get_length() > 0) {
                 throw new \Exception('unexpected output');
             }
@@ -81,7 +81,7 @@ class Form {
                     return substr($q, 0, 3) !== '$_=';
                 });
 
-                $queryParts[] = '$_=' . base64_encode(join("\x00", array($formSignature, json_encode($publicRequestValues), $httpStatus, $jsonData)));
+                $queryParts[] = '$_=' . base64_encode(join("\x00", array($formSignature, json_encode($publicRequestValues), $httpStatus, json_encode($bodyData))));
 
                 // using the dedicated 303 response type
                 header('HTTP/1.1 303 See Other');
@@ -98,7 +98,7 @@ class Form {
 
             header('HTTP/1.1 ' . $httpStatus . ' ' . $statusLabels[$httpStatus]);
             header('Content-Type: text/json');
-            echo $jsonData;
+            echo json_encode($bodyData);
         });
     }
 
