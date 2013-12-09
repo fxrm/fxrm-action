@@ -72,7 +72,8 @@ class Context {
     }
 
     private function import($className, $value) {
-        if ($className === null || $value === null) {
+        // pass through simple values, but otherwise wrap even nulls in business primitives
+        if ($className === null) {
             return $value;
         }
 
