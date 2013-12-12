@@ -14,7 +14,7 @@ class MapSerializer implements Serializer {
         $this->context = $context;
     }
 
-    function export($ctx, $object) {
+    function export($object) {
         // convert into anonymous object
         $result = (object)null;
 
@@ -25,7 +25,7 @@ class MapSerializer implements Serializer {
         return $result;
     }
 
-    function import($ctx, $class, $value) {
+    function import($class, $value) {
         throw new \Exception('cannot import simple map objects');
     }
 }

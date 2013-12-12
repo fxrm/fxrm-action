@@ -8,7 +8,7 @@
 namespace Fxrm\Action;
 
 class UnixTimeSerializer implements Serializer {
-    function export($ctx, $object) {
+    function export($object) {
         if ($object instanceof \DateTime) {
             return $object->getTimestamp();
         }
@@ -16,7 +16,7 @@ class UnixTimeSerializer implements Serializer {
         throw new \Exception('expecting DateTime');
     }
 
-    function import($ctx, $class, $value) {
+    function import($class, $value) {
         if ($class !== 'DateTime') {
             throw new \Exception('must expect DateTime');
         }

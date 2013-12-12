@@ -74,14 +74,14 @@ class Context {
         $report(200, $this->export($result));
     }
 
-    public final function import($className, $value) {
+    private function import($className, $value) {
         // pass through simple values, but otherwise wrap even nulls in business primitives
         // @todo deal with nested structures!
         if ($className === null) {
             return $value;
         }
 
-        return $this->findSerializer($className)->import($this, $className, $value);
+        return $this->findSerializer($className)->import($className, $value);
     }
 
     public final function export($object) {
@@ -95,7 +95,7 @@ class Context {
             return null;
         }
 
-        return $this->findSerializer($className)->export($this, $object);
+        return $this->findSerializer($className)->export($object);
     }
 
     private function exportArray($array) {

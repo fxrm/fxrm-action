@@ -8,9 +8,9 @@
 namespace Fxrm\Action;
 
 interface Serializer {
-    function export($ctx, $object);
+    function export($object);
 
-    function import($ctx, $class, $value);
+    function import($class, $value);
 }
 
 ?>
