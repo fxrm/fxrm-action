@@ -8,11 +8,11 @@
 namespace Fxrm\Action;
 
 class ValueSerializer implements Serializer {
-    function export($object) {
+    function export($ctx, $object) {
         return (string)$object;
     }
 
-    function import($class, $value) {
+    function import($ctx, $class, $value) {
         return new $class($value);
     }
 }

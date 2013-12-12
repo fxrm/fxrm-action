@@ -71,23 +71,23 @@ class Context {
         $report(200, $this->export($result));
     }
 
-    private function import($className, $value) {
+    public final function import($className, $value) {
         // pass through simple values, but otherwise wrap even nulls in business primitives
         if ($className === null) {
             return $value;
         }
 
-        return $this->findSerializer($className)->import($className, $value);
+        return $this->findSerializer($className)->import($this, $className, $value);
     }
 
-    private function export($object) {
+    public final function export($object) {
         $className = is_object($object) ? get_class($object) : null;
 
         if ($className === null || $object === null) {
             return $object;
         }
 
-        return $this->findSerializer($className)->export($object);
+        return $this->findSerializer($className)->export($this, $object);
     }
 
     private function exportException($e) {

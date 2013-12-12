@@ -14,11 +14,11 @@ class StoreIdSerializer implements Serializer {
         $this->store = $store;
     }
 
-    function export($object) {
+    function export($ctx, $object) {
         return (string)$this->store->export($object);
     }
 
-    function import($class, $value) {
+    function import($ctx, $class, $value) {
         return $this->store->import($class, $value);
     }
 }
