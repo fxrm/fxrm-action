@@ -7,14 +7,19 @@
 
 namespace Fxrm\Action;
 
-// @todo fold into core method to avoid needing exposing $ctx
 class MapSerializer implements Serializer {
+    private $context;
+
+    function __construct(Context $context) {
+        $this->context = $context;
+    }
+
     function export($ctx, $object) {
         // convert into anonymous object
         $result = (object)null;
 
         foreach ($object as $n => $v) {
-            $result->$n = $ctx->export($v);
+            $result->$n = $this->context->export($v);
         }
 
         return $result;

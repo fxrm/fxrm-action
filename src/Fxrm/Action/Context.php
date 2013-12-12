@@ -13,6 +13,7 @@ namespace Fxrm\Action;
  */
 class Context {
     private $serializerMap;
+    private $defaultSerializer;
 
     function __construct($serializerMap, $exceptionMap) {
         $this->serializerMap = array();
@@ -29,6 +30,8 @@ class Context {
             $class = new \ReflectionClass($className);
             $this->exceptionMap[$class->getName()] = $callback;
         }
+
+        $this->defaultSerializer = new MapSerializer($this);
     }
 
     public final function invoke($instance, $methodName, $getParameter, $report) {
@@ -127,7 +130,7 @@ class Context {
             }
         }
 
-        throw new \Exception('cannot find serializer for import: ' . $className); // developer error
+        return $this->defaultSerializer;
     }
 }
 
