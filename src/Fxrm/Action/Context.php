@@ -73,6 +73,7 @@ class Context {
 
     public final function import($className, $value) {
         // pass through simple values, but otherwise wrap even nulls in business primitives
+        // @todo deal with nested structures!
         if ($className === null) {
             return $value;
         }
@@ -83,11 +84,25 @@ class Context {
     public final function export($object) {
         $className = is_object($object) ? get_class($object) : null;
 
-        if ($className === null || $object === null) {
-            return $object;
+        if ($className === null) {
+            return is_array($object) ? $this->exportArray($object) : $object;
+        }
+
+        if ($object === null) {
+            return null;
         }
 
         return $this->findSerializer($className)->export($this, $object);
+    }
+
+    private function exportArray($array) {
+        $result = array();
+
+        foreach ($array as $object) {
+            $result[] = $this->export($object);
+        }
+
+        return $result;
     }
 
     private function exportException($e) {

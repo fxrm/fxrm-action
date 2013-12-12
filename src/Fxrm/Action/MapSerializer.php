@@ -7,6 +7,7 @@
 
 namespace Fxrm\Action;
 
+// @todo fold into core method to avoid needing exposing $ctx
 class MapSerializer implements Serializer {
     function export($ctx, $object) {
         // convert into anonymous object
