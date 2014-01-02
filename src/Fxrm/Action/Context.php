@@ -34,7 +34,18 @@ class Context {
         $this->defaultSerializer = new MapSerializer($this);
     }
 
-    public final function invoke($instance, $methodName, $getParameter, $report) {
+    public final function invoke($initializer, $methodName, $getParameter, $report) {
+        $instance = null;
+
+        try {
+            $instance = is_callable($initializer) ? $initializer() : $initializer;
+        } catch(\Exception $e) {
+            // report exception
+            // using dedicated 500 status (syntax was OK but server-side error)
+            $report(500, $this->exportException($e));
+            return;
+        }
+
         $bodyFunctionInfo = new \ReflectionMethod($instance, $methodName);
 
         // collect necessary parameter data
@@ -111,6 +122,7 @@ class Context {
     private function exportException($e) {
         $class = new \ReflectionClass($e);
 
+        // @todo instead, check each ancestor
         foreach ($this->exceptionMap as $rootClassName => $callback) {
             if ($class->getName() === $rootClassName || $class->isSubclassOf($rootClassName)) {
                 return $callback($e);
