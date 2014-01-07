@@ -41,8 +41,8 @@ class Context {
             $instance = is_callable($initializer) ? $initializer() : $initializer;
         } catch(\Exception $e) {
             // report exception
-            // using dedicated 500 status (syntax was OK but server-side error)
-            $report(500, $this->exportException($e));
+            // syntax was OK but server-side error
+            $this->exportException($e, $report);
             return;
         }
 
@@ -61,7 +61,9 @@ class Context {
             try {
                 $apiParameterList[] = $this->import($class === null ? null : $class->getName(), $value);
             } catch(\Exception $e) {
-                $fieldErrors->$param = $this->exportException($e);
+                $this->exportException($e, function ($status, $bodyData) use($fieldErrors) {
+                    $fieldErrors->$param = $bodyData;
+                });
             }
         }
 
@@ -76,8 +78,8 @@ class Context {
             $result = $bodyFunctionInfo->invokeArgs($instance, $apiParameterList);
         } catch(\Exception $e) {
             // report exception
-            // using dedicated 500 status (syntax was OK but server-side error)
-            $report(500, $this->exportException($e));
+            // syntax was OK but server-side error
+            $this->exportException($e, $report);
             return;
         }
 
@@ -119,13 +121,21 @@ class Context {
         return $result;
     }
 
-    private function exportException($e) {
+    private function exportException($e, $report) {
         $class = new \ReflectionClass($e);
 
         // @todo instead, check each ancestor
         foreach ($this->exceptionMap as $rootClassName => $callback) {
             if ($class->getName() === $rootClassName || $class->isSubclassOf($rootClassName)) {
-                return $callback($e);
+                $response = $callback($e);
+
+                if (is_object($response)) {
+                    $report($response->status ?: 500, $response->bodyData);
+                } else {
+                    $report(500, $response);
+                }
+
+                return;
             }
         }
 
