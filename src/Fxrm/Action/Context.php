@@ -34,15 +34,13 @@ class Context {
         $this->defaultSerializer = new MapSerializer($this);
     }
 
-    public final function invoke($initializer, $methodName, $getParameter, $report) {
+    public final function invoke($initializer, $methodName, $getParameter, $reportInitializationError, $reportValidationError, $reportActionError, $reportSuccess) {
         $instance = null;
 
         try {
             $instance = is_callable($initializer) ? $initializer() : $initializer;
         } catch(\Exception $e) {
-            // report exception
-            // using dedicated 500 status (syntax was OK but server-side error)
-            $report(500, $this->exportException($e));
+            $reportInitializationError($this->exportException($e));
             return;
         }
 
@@ -67,22 +65,19 @@ class Context {
 
         // report field validation errors
         if (count((array)$fieldErrors) > 0) {
-            // using dedicated 400 status (bad client request syntax)
-            $report(400, $fieldErrors);
+            $reportValidationError($fieldErrors);
             return;
         }
 
         try {
             $result = $bodyFunctionInfo->invokeArgs($instance, $apiParameterList);
         } catch(\Exception $e) {
-            // report exception
-            // using dedicated 500 status (syntax was OK but server-side error)
-            $report(500, $this->exportException($e));
+            $reportActionError($this->exportException($e));
             return;
         }
 
         // result output
-        $report(200, $this->export($result));
+        $reportSuccess($this->export($result));
     }
 
     private function import($className, $value) {
