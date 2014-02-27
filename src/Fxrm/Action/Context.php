@@ -56,10 +56,14 @@ class Context {
 
             $value = $getParameter($param);
 
-            try {
-                $apiParameterList[] = $this->import($class === null ? null : $class->getName(), $value);
-            } catch(\Exception $e) {
-                $fieldErrors->$param = $this->exportException($e);
+            if ($bodyFunctionParameter->allowsNull() && ($value === null || $value === '')) {
+                $apiParameterList[] = null;
+            } else {
+                try {
+                    $apiParameterList[] = $this->import($class === null ? null : $class->getName(), $value);
+                } catch(\Exception $e) {
+                    $fieldErrors->$param = $this->exportException($e);
+                }
             }
         }
 
