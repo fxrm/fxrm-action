@@ -105,6 +105,10 @@ class Context {
             return null;
         }
 
+        if ($className === 'ArrayObject') {
+            return $this->exportArray($object);
+        }
+
         return $this->findSerializer($className)->export($object);
     }
 
