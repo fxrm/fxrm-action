@@ -56,11 +56,11 @@ class Context {
 
             $value = $getParameter($param);
 
-            if ($bodyFunctionParameter->allowsNull() && ($value === null || $value === '')) {
+            if ($bodyFunctionParameter->allowsNull() && $value === null) {
                 $apiParameterList[] = null;
             } else {
                 try {
-                    $apiParameterList[] = $this->import($class === null ? null : $class->getName(), $value);
+                    $apiParameterList[] = $this->import($class === null ? null : $class->getName(), $value, $bodyFunctionParameter->allowsNull());
                 } catch(\Exception $e) {
                     $fieldErrors->$param = $this->exportException($e);
                 }
@@ -84,14 +84,18 @@ class Context {
         $reportSuccess($this->export($result));
     }
 
-    private function import($className, $value) {
+    private function import($className, $value, $isNullable) {
         // pass through simple values, but otherwise wrap even nulls in business primitives
         // @todo deal with nested structures!
         if ($className === null) {
             return $value;
         }
 
-        return $this->findSerializer($className)->import($className, $value);
+        $ser = $this->findSerializer($className);
+
+        return $isNullable && $ser instanceof NullableSerializer
+            ? $ser->importNullable($className, $value)
+            : $ser->import($className, $value);
     }
 
     public final function export($object) {
